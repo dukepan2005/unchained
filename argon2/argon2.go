@@ -16,12 +16,27 @@ var (
 	ErrHashComponentMismatch   = errors.New("unchained/argon2: hashed password components mismatch")
 	ErrAlgorithmMismatch       = errors.New("unchained/argon2: algorithm mismatch")
 	ErrIncompatibleVersion     = errors.New("unchained/argon2: incompatible version")
+	ErrUnsupportedVariant      = errors.New("unchained/argon2: unsupported argon2 variant")
 )
 
-// Argon2Hasher implements Argon2i password hasher.
+// Argon2 variants supported by Django's Argon2PasswordHasher.
+const (
+	VariantI  = "argon2i"
+	VariantID = "argon2id"
+)
+
+// Argon2Hasher implements an Argon2 password hasher compatible with
+// Django's `django.contrib.auth.hashers.Argon2PasswordHasher`.
+//
+// It supports both argon2i (Django 1.10–3.0 default) and argon2id
+// (Django 3.1+ default) variants. On Verify, the variant is auto-detected
+// from the encoded password; on Encode, the configured Variant is used.
 type Argon2Hasher struct {
-	// Algorithm identifier.
+	// Algorithm identifier (the leading prefix in the encoded password).
 	Algorithm string
+	// Variant selects which argon2 function to use on Encode.
+	// Valid values: "argon2i", "argon2id". Defaults to "argon2id".
+	Variant string
 	// Defines the amount of computation time, given in number of iterations.
 	Time uint32
 	// Defines the memory usage (KiB).
@@ -32,17 +47,36 @@ type Argon2Hasher struct {
 	Length uint32
 }
 
+func deriveKey(variant string, password, salt []byte, time, memory uint32, threads uint8, length uint32) ([]byte, error) {
+	switch variant {
+	case VariantI:
+		return argon2.Key(password, salt, time, memory, threads, length), nil
+	case VariantID:
+		return argon2.IDKey(password, salt, time, memory, threads, length), nil
+	default:
+		return nil, ErrUnsupportedVariant
+	}
+}
+
 // Encode turns a plain-text password into a hash.
 func (h *Argon2Hasher) Encode(password string, salt string) (string, error) {
+	variant := h.Variant
+	if variant == "" {
+		variant = VariantID
+	}
+
 	bSalt := []byte(salt)
-	hash := argon2.Key([]byte(password), bSalt, h.Time, h.Memory, h.Threads, h.Length)
+	hash, err := deriveKey(variant, []byte(password), bSalt, h.Time, h.Memory, h.Threads, h.Length)
+	if err != nil {
+		return "", err
+	}
 
 	b64Salt := base64.RawStdEncoding.EncodeToString(bSalt)
 	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
 
 	s := fmt.Sprintf("%s$%s$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		h.Algorithm,
-		"argon2i",
+		variant,
 		argon2.Version,
 		h.Memory,
 		h.Time,
@@ -62,58 +96,85 @@ func (h *Argon2Hasher) Verify(password string, encoded string) (bool, error) {
 		return false, ErrHashComponentMismatch
 	}
 
-	algorithm, method, version, params, salt, hash := s[0], s[1], s[2], s[3], s[4], s[5]
+	algorithm, variant, version, params, salt, hash := s[0], s[1], s[2], s[3], s[4], s[5]
 
-	if algorithm != h.Algorithm || method != "argon2i" {
+	if algorithm != h.Algorithm {
 		return false, ErrAlgorithmMismatch
 	}
 
-	var v int
-	var err error
-
-	_, err = fmt.Sscanf(version, "v=%d", &v)
-
-	if err != nil {
-		return false, ErrHashComponentUnreadable
+	if variant != VariantI && variant != VariantID {
+		return false, ErrUnsupportedVariant
 	}
 
+	var v int
+	if _, err := fmt.Sscanf(version, "v=%d", &v); err != nil {
+		return false, ErrHashComponentUnreadable
+	}
 	if v != argon2.Version {
 		return false, ErrIncompatibleVersion
 	}
 
 	var time, memory uint32
 	var threads uint8
-
-	_, err = fmt.Sscanf(params, "m=%d,t=%d,p=%d", &memory, &time, &threads)
-
-	if err != nil {
+	if _, err := fmt.Sscanf(params, "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
 		return false, ErrHashComponentUnreadable
 	}
 
 	bSalt, err := base64.RawStdEncoding.DecodeString(salt)
-
 	if err != nil {
 		return false, ErrHashComponentUnreadable
 	}
 
 	bHash, err := base64.RawStdEncoding.DecodeString(hash)
-
 	if err != nil {
 		return false, ErrHashComponentUnreadable
 	}
 
-	newHash := argon2.Key([]byte(password), bSalt, time, memory, threads, uint32(len(bHash)))
+	newHash, err := deriveKey(variant, []byte(password), bSalt, time, memory, threads, uint32(len(bHash)))
+	if err != nil {
+		return false, err
+	}
 
 	return subtle.ConstantTimeCompare(bHash, newHash) == 1, nil
 }
 
-// NewArgon2Hasher secures password hashing using the argon2 algorithm.
-func NewArgon2Hasher() *Argon2Hasher {
+// NewArgon2idHasher returns an Argon2Hasher configured to match Django's
+// current `Argon2PasswordHasher` defaults (Django 3.1+, including 5.x).
+//
+// Use this for new password hashes.
+func NewArgon2idHasher() *Argon2Hasher {
 	return &Argon2Hasher{
 		Algorithm: "argon2",
+		Variant:   VariantID,
+		Time:      2,
+		Memory:    102400, // 100 MiB, matches Django's default memory_cost
+		Threads:   8,      // matches Django's default parallelism
+		Length:    16,
+	}
+}
+
+// NewArgon2iHasher returns an Argon2Hasher configured for the legacy argon2i
+// variant used by Django 1.10 through 3.0.
+//
+// The defaults intentionally match historical Django values for backward
+// compatibility with hashes generated by older Django versions and earlier
+// versions of this library. Prefer NewArgon2idHasher for new hashes.
+func NewArgon2iHasher() *Argon2Hasher {
+	return &Argon2Hasher{
+		Algorithm: "argon2",
+		Variant:   VariantI,
 		Time:      2,
 		Memory:    512,
 		Threads:   2,
 		Length:    16,
 	}
+}
+
+// NewArgon2Hasher is a backward-compatible alias for NewArgon2iHasher.
+//
+// Deprecated: Use NewArgon2idHasher for new code (matches Django 3.1+).
+// This constructor is preserved so existing callers continue to produce
+// the legacy argon2i format with the original (weak) defaults.
+func NewArgon2Hasher() *Argon2Hasher {
+	return NewArgon2iHasher()
 }

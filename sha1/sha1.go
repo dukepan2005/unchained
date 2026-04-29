@@ -13,8 +13,14 @@ import (
 var (
 	ErrHashComponentMismatch  = errors.New("unchained/sha1: hashed password components mismatch")
 	ErrAlgorithmMismatch      = errors.New("unchained/sha1: algorithm mismatch")
-	ErrSaltContainsDollarSing = errors.New("unchained/sha1: salt contains dollar sign ($)")
+	ErrSaltContainsDollarSign = errors.New("unchained/sha1: salt contains dollar sign ($)")
 	ErrSaltIsEmpty            = errors.New("unchained/sha1: salt is empty")
+
+	// ErrSaltContainsDollarSing is a backwards-compatible alias preserved
+	// because the original symbol was misspelled.
+	//
+	// Deprecated: use ErrSaltContainsDollarSign.
+	ErrSaltContainsDollarSing = ErrSaltContainsDollarSign
 )
 
 // SHA1PasswordHasher implements Salted SHA1 password hasher.
@@ -33,7 +39,7 @@ func (h *SHA1PasswordHasher) Encode(password string, salt string) (string, error
 		}
 
 		if strings.Contains(salt, "$") {
-			return "", ErrSaltContainsDollarSing
+			return "", ErrSaltContainsDollarSign
 		}
 	} else {
 		salt = ""

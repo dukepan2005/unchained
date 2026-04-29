@@ -148,3 +148,21 @@ func TestBCryptSHA265VerifyInvalidPassword(t *testing.T) {
 		t.Fatal("Password should not be valid.")
 	}
 }
+
+func TestBCryptVerifyMalformedHashReturnsError(t *testing.T) {
+	// A malformed bcrypt blob (wrong segment count, garbage cost) must surface
+	// as a non-nil error rather than be silently swallowed as "password mismatch".
+	_, err := NewBCryptHasher().Verify("admin", "bcrypt$$this-is-not-a-bcrypt-hash")
+	if err == nil {
+		t.Fatal("Expected error for malformed bcrypt hash, got nil")
+	}
+}
+
+func TestBCryptVerifyAlgorithmMismatch(t *testing.T) {
+	// Passing a bcrypt_sha256-formatted hash to a plain bcrypt hasher should
+	// flag the mismatch up front.
+	_, err := NewBCryptHasher().Verify("admin", "bcrypt_sha256$$2b$12$WZK9cb9qKN.Q5LCYPq/gj.6gvry1b37HUsJER6KhQBnIWmPyyaaqi")
+	if err != ErrAlgorithmMismatch {
+		t.Fatalf("Expected ErrAlgorithmMismatch, got: %v", err)
+	}
+}
