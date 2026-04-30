@@ -13,10 +13,19 @@ func TestMakePasswordDefault(t *testing.T) {
 		t.Fatalf("MakePassword error: %s", err)
 	}
 
-	expected := "pbkdf2_sha256$216000$1TMOT0Rohg3g$N+wIigWW4zpxnFBwXTWK1Qt8C9aduBIAayDS2ee8KxI="
+	expected := "pbkdf2_sha256$1200000$1TMOT0Rohg3g$s0fUiSQszmDp1NrgW33wzSRaciQDtPSyx2QFPqmwZkw="
 
 	if encoded != expected {
 		t.Fatalf("Encoded hash %s does not match %s.", encoded, expected)
+	}
+
+	// Round-trip: the hash we just generated must verify with the same password.
+	valid, err := CheckPassword("admin", encoded)
+	if err != nil {
+		t.Fatalf("CheckPassword error: %s", err)
+	}
+	if !valid {
+		t.Fatal("Round-trip verification of generated hash failed.")
 	}
 }
 
@@ -155,6 +164,26 @@ func TestCheckPasswordArgon2(t *testing.T) {
 
 	if !valid {
 		t.Fatal("Password should be valid.")
+	}
+}
+
+func TestMakePasswordArgon2RoundTripsAsArgon2id(t *testing.T) {
+	// MakePassword with the top-level "argon2" identifier should produce
+	// argon2id hashes (matching Django 3.1+ default) that round-trip via
+	// CheckPassword.
+	encoded, err := MakePassword("admin", "", Argon2Hasher)
+	if err != nil {
+		t.Fatalf("MakePassword error: %s", err)
+	}
+	if !strings.Contains(encoded, "$argon2id$") {
+		t.Fatalf("Expected argon2id encoded hash, got: %s", encoded)
+	}
+	valid, err := CheckPassword("admin", encoded)
+	if err != nil {
+		t.Fatalf("CheckPassword error: %s", err)
+	}
+	if !valid {
+		t.Fatal("Round-trip verification of argon2id hash failed.")
 	}
 }
 

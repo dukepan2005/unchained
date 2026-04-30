@@ -19,7 +19,13 @@ var (
 	ErrHashComponentUnreadable = errors.New("unchained/pbkdf2: unreadable component in hashed password")
 	ErrHashComponentMismatch   = errors.New("unchained/pbkdf2: hashed password components mismatch")
 	ErrAlgorithmMismatch       = errors.New("unchained/pbkdf2: algorithm mismatch")
-	ErrSaltContainsDollarSing  = errors.New("unchained/pbkdf2: salt contains dollar sign ($)")
+	ErrSaltContainsDollarSign  = errors.New("unchained/pbkdf2: salt contains dollar sign ($)")
+
+	// ErrSaltContainsDollarSing is a backwards-compatible alias preserved
+	// because the original symbol was misspelled.
+	//
+	// Deprecated: use ErrSaltContainsDollarSign.
+	ErrSaltContainsDollarSing = ErrSaltContainsDollarSign
 )
 
 // PBKDF2Hasher implements PBKDF2 password hasher.
@@ -37,7 +43,7 @@ type PBKDF2Hasher struct {
 // Encode turns a plain-text password into a hash.
 func (h *PBKDF2Hasher) Encode(password string, salt string, iterations int) (string, error) {
 	if strings.Contains(salt, "$") {
-		return "", ErrSaltContainsDollarSing
+		return "", ErrSaltContainsDollarSign
 	}
 
 	if iterations <= 0 {
@@ -85,10 +91,12 @@ func (h *PBKDF2Hasher) Verify(password string, encoded string) (bool, error) {
 //
 // This is compatible with other implementations of PBKDF2,
 // such as openssl's PKCS5_PBKDF2_HMAC_SHA1().
+//
+// Iterations default matches Django 5.x's PBKDF2PasswordHasher.
 func NewPBKDF2SHA1Hasher() *PBKDF2Hasher {
 	return &PBKDF2Hasher{
 		Algorithm:  "pbkdf2_sha1",
-		Iterations: 216000,
+		Iterations: 1_200_000,
 		Size:       sha1.Size,
 		Digest:     sha1.New,
 	}
@@ -97,11 +105,13 @@ func NewPBKDF2SHA1Hasher() *PBKDF2Hasher {
 // NewPBKDF2SHA256Hasher secures password hashing using the PBKDF2 algorithm.
 //
 // Configured to use PBKDF2 + HMAC + SHA256.
-// The result is a 64 byte binary string.
+// The result is a 32 byte binary string.
+//
+// Iterations default matches Django 5.x's PBKDF2PasswordHasher.
 func NewPBKDF2SHA256Hasher() *PBKDF2Hasher {
 	return &PBKDF2Hasher{
 		Algorithm:  "pbkdf2_sha256",
-		Iterations: 216000,
+		Iterations: 1_200_000,
 		Size:       sha256.Size,
 		Digest:     sha256.New,
 	}

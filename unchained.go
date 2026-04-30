@@ -65,7 +65,7 @@ func IsValidHasher(hasher string) bool {
 }
 
 // IsWeakHasher returns true if the hasher
-// is not recommend by Django, or false otherwise.
+// is not recommended by Django, or false otherwise.
 func IsWeakHasher(hasher string) bool {
 	switch hasher {
 	case
@@ -88,7 +88,6 @@ func IsHasherImplemented(hasher string) bool {
 		Argon2Hasher,
 		BCryptHasher,
 		BCryptSHA256Hasher,
-		// CryptHasher,
 		MD5Hasher,
 		PBKDF2SHA1Hasher,
 		PBKDF2SHA256Hasher,
@@ -139,7 +138,7 @@ func CheckPassword(password, encoded string) (bool, error) {
 
 	switch hasher {
 	case Argon2Hasher:
-		return argon2.NewArgon2Hasher().Verify(password, encoded)
+		return argon2.NewArgon2idHasher().Verify(password, encoded)
 	case BCryptHasher:
 		return bcrypt.NewBCryptHasher().Verify(password, encoded)
 	case BCryptSHA256Hasher:
@@ -169,7 +168,7 @@ func CheckPassword(password, encoded string) (bool, error) {
 //
 // If password is empty then return a concatenation
 // of UnusablePasswordPrefix and a random string.
-// If salt is empty then a randon string is generated.
+// If salt is empty then a random string is generated.
 // BCrypt algorithm ignores salt parameter.
 // If hasher is "default", encode using default hasher.
 func MakePassword(password, salt, hasher string) (string, error) {
@@ -187,7 +186,7 @@ func MakePassword(password, salt, hasher string) (string, error) {
 
 	switch hasher {
 	case Argon2Hasher:
-		return argon2.NewArgon2Hasher().Encode(password, salt)
+		return argon2.NewArgon2idHasher().Encode(password, salt)
 	case BCryptHasher:
 		return bcrypt.NewBCryptHasher().Encode(password, salt)
 	case BCryptSHA256Hasher:

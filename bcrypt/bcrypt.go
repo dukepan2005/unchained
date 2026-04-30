@@ -67,7 +67,13 @@ func (h *BCryptHasher) Verify(password string, encoded string) (bool, error) {
 	}
 
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil, nil
+	if err == bcrypt.ErrMismatchedHashAndPassword {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // NewBCryptHasher secures password hashing using the bcrypt algorithm.
