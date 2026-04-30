@@ -96,7 +96,7 @@ func (h *PBKDF2Hasher) Verify(password string, encoded string) (bool, error) {
 func NewPBKDF2SHA1Hasher() *PBKDF2Hasher {
 	return &PBKDF2Hasher{
 		Algorithm:  "pbkdf2_sha1",
-		Iterations: 1000000,
+		Iterations: 1_200_000,
 		Size:       sha1.Size,
 		Digest:     sha1.New,
 	}
@@ -105,13 +105,13 @@ func NewPBKDF2SHA1Hasher() *PBKDF2Hasher {
 // NewPBKDF2SHA256Hasher secures password hashing using the PBKDF2 algorithm.
 //
 // Configured to use PBKDF2 + HMAC + SHA256.
-// The result is a 64 byte binary string.
+// The result is a 32 byte binary string.
 //
 // Iterations default matches Django 5.x's PBKDF2PasswordHasher.
 func NewPBKDF2SHA256Hasher() *PBKDF2Hasher {
 	return &PBKDF2Hasher{
 		Algorithm:  "pbkdf2_sha256",
-		Iterations: 1000000,
+		Iterations: 1_200_000,
 		Size:       sha256.Size,
 		Digest:     sha256.New,
 	}

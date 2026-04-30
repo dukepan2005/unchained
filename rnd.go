@@ -3,6 +3,7 @@ package unchained
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"math"
 )
 
 const allowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -19,13 +20,9 @@ func GetRandomString(length int) string {
 	}
 
 	n := uint32(len(allowedChars))
-	// Threshold for unbiased rejection sampling: discard any uint32 value
-	// that would cause modulo bias.
-	maxAcceptable := (uint32(1<<32-1)/n)*n + n
-	if maxAcceptable < n {
-		// Overflowed (n is a power of two divisor of 2^32); no bias possible.
-		maxAcceptable = 0
-	}
+	// Rejection-sampling threshold: accept only values in [0, maxAcceptable)
+	// so the accepted range is exactly divisible by n (zero modulo bias).
+	maxAcceptable := (math.MaxUint32 / n) * n
 
 	out := make([]byte, length)
 	// 4 bytes per character, with a generous overhead for rejection.
@@ -49,7 +46,7 @@ func GetRandomString(length int) string {
 		}
 		v := binary.LittleEndian.Uint32(buf[bufIdx:])
 		bufIdx += 4
-		if maxAcceptable == 0 || v < maxAcceptable {
+		if v < maxAcceptable {
 			out[pos] = allowedChars[v%n]
 			pos++
 		}

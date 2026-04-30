@@ -31,7 +31,7 @@ Secure password hashers for Go that are wire-compatible with
 
 ## Install
 
-Requires Go 1.9+ (the module currently declares `go 1.24` in `go.mod`).
+Requires Go 1.24+.
 
 ```sh
 go get github.com/alexandrevicenzi/unchained
@@ -54,7 +54,7 @@ func main() {
         panic(err)
     }
     fmt.Println(encoded)
-    // pbkdf2_sha256$1000000$<salt>$<base64-hash>
+    // pbkdf2_sha256$1200000$<salt>$<base64-hash>
 
     // Verify
     ok, err := unchained.CheckPassword("my-password", encoded)
@@ -121,7 +121,7 @@ time, so no special handling is needed.
 
 ```go
 encoded, err := unchained.MakePassword("S3cret!", "", "default")
-// encoded -> pbkdf2_sha256$1000000$<salt>$<base64-hash>
+// encoded -> pbkdf2_sha256$1200000$<salt>$<base64-hash>
 // Write `encoded` directly into auth_user.password
 ```
 
@@ -149,9 +149,9 @@ has grown to **1,200,000** (5.1+). The encoded format is unchanged, so verificat
 
 ### Encode at Django 5.x's default work factor
 
-`MakePassword` defaults to `PBKDF2Hasher.Iterations = 1,000,000`, which is close
-to (but below) Django 5.1's default of **1,200,000**. To match Django 5.x exactly,
-drop down to the `pbkdf2` sub-package:
+`MakePassword` defaults to `PBKDF2Hasher.Iterations = 1,200,000`, matching
+Django 5.1+'s default. To use a different iteration count, drop down to the
+`pbkdf2` sub-package:
 
 ```go
 import (
@@ -159,14 +159,14 @@ import (
     "github.com/alexandrevicenzi/unchained/pbkdf2"
 )
 
-func encodeForDjango5(password string) (string, error) {
+func encodeWithCustomIterations(password string, iterations int) (string, error) {
     h := pbkdf2.NewPBKDF2SHA256Hasher()
     salt := unchained.GetRandomString(unchained.DefaultSaltSize)
-    return h.Encode(password, salt, 1_200_000)
+    return h.Encode(password, salt, iterations)
 }
 ```
 
-> Even hashes generated with the lower default are valid in Django 5.x —
+> Hashes generated with a lower iteration count are still valid in Django 5.x —
 > Django will accept them and re-hash to its current default on the user's next login.
 
 ### Verify a hash from a Django 5.x database
@@ -265,9 +265,9 @@ Use these directly when you need to control parameters that the top-level
 - **BCrypt** ignores the `salt` argument; bcrypt manages its own salt internally
   (limitation of `golang.org/x/crypto/bcrypt`). Encoding the same password twice
   yields different hashes — both are valid.
-- **PBKDF2 default iterations** in this library is `1,000,000`, slightly below
-  Django 5.1's current default of `1,200,000`. Use the `pbkdf2` sub-package's
-  `Encode` with an explicit `iterations` value if you need to match Django exactly.
+- **PBKDF2 default iterations** is `1,200,000`, matching Django 5.1+'s default.
+  Use the `pbkdf2` sub-package's `Encode` with an explicit `iterations` value
+  to target a different Django version.
 - **Scrypt** (Django 4.0+) is not implemented.
 
 ## Testing
